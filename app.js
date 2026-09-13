@@ -1,12 +1,71 @@
-const CONFIG={API_URL:"https://script.google.com/macros/s/AKfycbxrT77B8vxzAeFeHVq5-UoJqR1DThj-pSUkeRrgrFBZ_FVfIbopfkqFGjl5ovv1AHAa/exec"};
-let state={orders:[],techs:[],customers:[],currentTechId:""};
+const CONFIG={API_URL:"https://script.google.com/macros/s/AKfycbz64G4TV8VE4ky2RfwRE3Yxhl9D8wjirBL0OKYNDQsfYtH7A8Qg2Wdg11h7R7kf1XUC/exec"}; // TeknisiHub V5.2
+let state={orders:[],techs:[],customers:[],user:null};
+let loginRole="ADMIN";
 const DEMO=CONFIG.API_URL.includes("PASTE_");
 
-function login(){if(document.getElementById("loginUser").value==="admin"&&document.getElementById("loginPass").value==="123456"){localStorage.setItem("th_login","1");boot()}else alert("Login demo: admin / 123456")}
-function logout(){localStorage.removeItem("th_login");location.reload()}
-function boot(){document.getElementById("loginScreen").classList.add("hidden");document.getElementById("app").classList.remove("hidden");showPage("dashboard");loadData()}
-if(localStorage.getItem("th_login")==="1") boot();
-
+function setLoginRole(role){
+  loginRole=role;
+  document.getElementById("roleAdmin").classList.toggle("active",role==="ADMIN");
+  document.getElementById("roleTech").classList.toggle("active",role==="TEKNISI");
+  document.getElementById("loginUser").placeholder=role==="ADMIN"?"Username admin":"Username teknisi";
+  document.getElementById("loginPass").placeholder=role==="ADMIN"?"Password":"Password / PIN";
+  document.getElementById("loginHint").textContent=role==="ADMIN"?"Admin demo: admin / 123456":"Akun teknisi dibuat oleh Admin. Default awal: password 123456.";
+}
+async function login(){
+  const username=document.getElementById("loginUser").value.trim();
+  const password=document.getElementById("loginPass").value;
+  if(!username||!password){alert("Username dan password wajib diisi.");return}
+  try{
+    const r=await api("login",{username,password,role:loginRole});
+    if(!r.ok){alert(r.error||"Login gagal.");return}
+    state.user=r.user; localStorage.setItem("th_session",JSON.stringify(r));
+    boot();
+  }catch(e){alert("Login gagal: "+e.message)}
+}
+function logout(){localStorage.removeItem("th_session");location.reload()}
+function boot(){
+  document.getElementById("loginScreen").classList.add("hidden");
+  document.getElementById("app").classList.remove("hidden");
+  const u=state.user||{};
+  document.getElementById("sidebarUser").innerHTML=`<b>${esc(u.name||u.username||"User")}</b><br>${esc(u.role||"")}`;
+  applyRoleUI();
+  showPage(u.role==="TEKNISI"?"portal":"dashboard");
+  loadData();
+}
+async function restoreSession(){
+  const raw=localStorage.getItem("th_session");
+  if(!raw)return;
+  try{
+    const s=JSON.parse(raw);
+    if(!s.token||!s.user)return;
+    if(DEMO){state.user=s.user;boot();return}
+    const r=await api("me",{token:s.token});
+    if(r.ok){state.user=r.user;boot()}else localStorage.removeItem("th_session");
+  }catch(e){localStorage.removeItem("th_session")}
+}
+function applyRoleUI(){
+  const isTech=state.user?.role==="TEKNISI";
+  document.querySelectorAll(".nav button").forEach(b=>{
+    const page=b.dataset.page;
+    b.classList.toggle("hidden",isTech && !["portal"].includes(page));
+  });
+}
+async function api(action,payload={}){
+  if(DEMO){return mockApi(action,payload)}
+  const session=JSON.parse(localStorage.getItem("th_session")||"{}");
+  const r=await fetch(CONFIG.API_URL,{method:"POST",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify({action,...payload,token:payload.token||session.token||""})});
+  return await r.json();
+}
+async function loadData(){
+  try{
+    let r=await api("list");
+    if(r.ok===false)throw new Error(r.error||"Gagal memuat data");
+    state.orders=r.orders||[];state.techs=r.techs||[];state.customers=r.customers||[];
+    document.getElementById("syncText").textContent=DEMO?"Demo Mode":"Google Sheets Connected";
+    refreshAll();
+  }catch(e){alert("Gagal memuat data: "+e.message)}
+}
+function refreshAll(){renderDashboard();renderOrders();renderDispatch();renderTechs();renderCustomers();renderFinance();renderPortal()}
 function showPage(id){
   document.querySelectorAll(".page").forEach(x=>x.classList.add("hidden"));
   document.getElementById(id).classList.remove("hidden");
@@ -73,12 +132,55 @@ function openOrderModal(){
  <div class="form-group"><label>Harga Customer</label><input id="fPrice" type="number" value="150000"></div>
  <div class="form-group"><label>Fee Teknisi</label><input id="fFee" type="number" value="100000"></div></div>
  <div class="form-actions"><button class="secondary" onclick="closeModal()">Batal</button><button onclick="saveOrder()">Simpan</button></div>`;
- modal.classList.remove("hidden")
+ document.getElementById("modal").classList.remove("hidden");
 }
 async function saveOrder(){
- const o={id:uid("ORD"),createdAt:new Date().toISOString(),customerName:fName.value,customerPhone:fPhone.value,address:fAddress.value,service:fService.value,priority:fPriority.value,complaint:fComplaint.value,price:Number(fPrice.value||0),techFee:Number(fFee.value||0),technicianId:"",finalPrice:Number(fPrice.value||0),status:"BARU",offeredTechnicianIds:"",acceptedAt:"",completedAt:""};
- if(!o.customerName||!o.phone&&false){alert("Lengkapi data");return}
- await api("createOrder",{order:o});closeModal();await loadData()
+  const $ = id => document.getElementById(id);
+  const customerName = $("fName").value.trim();
+  const customerPhone = $("fPhone").value.trim();
+  const address = $("fAddress").value.trim();
+  const service = $("fService").value;
+  const priority = $("fPriority").value;
+  const complaint = $("fComplaint").value.trim();
+  const price = Number($("fPrice").value || 0);
+  const techFee = Number($("fFee").value || 0);
+
+  if(!customerName || !customerPhone || !address || !service){
+    alert("Nama customer, No. HP, alamat, dan layanan wajib diisi.");
+    return;
+  }
+
+  const btn = [...document.querySelectorAll("#modalBody button")].find(b => b.textContent.trim() === "Simpan");
+  if(btn){ btn.disabled = true; btn.textContent = "Menyimpan..."; }
+
+  try{
+    const o={
+      id:uid("ORD"),
+      createdAt:new Date().toISOString(),
+      customerName,
+      customerPhone,
+      address,
+      service,
+      priority,
+      complaint,
+      price,
+      techFee,
+      technicianId:"",
+      finalPrice:price,
+      status:"BARU",
+      offeredTechnicianIds:"",
+      acceptedAt:"",
+      completedAt:""
+    };
+    const result = await api("createOrder",{order:o});
+    if(result && result.ok === false) throw new Error(result.error || "Order gagal disimpan.");
+    closeModal();
+    await loadData();
+    showPage("orders");
+  }catch(err){
+    alert("Gagal menyimpan order: " + err.message);
+    if(btn){ btn.disabled = false; btn.textContent = "Simpan"; }
+  }
 }
 function openTechModal(){
  modalTitle.textContent="Tambah Teknisi";
@@ -88,15 +190,25 @@ function openTechModal(){
  <div class="form-group"><label>Skill</label><input id="tSkills" placeholder="AC, Washing Machine"></div>
  <div class="form-group"><label>Tools</label><input id="tTools" placeholder="Own tools"></div><div class="form-group"><label>Vehicle</label><input id="tVehicle"></div>
  <div class="form-group"><label>Payment</label><input id="tPayment" placeholder="Bank / e-wallet"></div>
- <div class="form-group"><label>Status</label><select id="tStatus"><option>ONLINE</option><option>OFFLINE</option><option>PENDING</option></select></div></div>
+ <div class="form-group"><label>Status</label><select id="tStatus"><option>ONLINE</option><option>OFFLINE</option><option>PENDING</option></select></div>
+ <div class="form-group"><label>Username Login</label><input id="tUsername" placeholder="Contoh: budi.ac"></div>
+ <div class="form-group"><label>Password / PIN Awal</label><input id="tPassword" value="123456"></div></div>
  <div class="form-actions"><button class="secondary" onclick="closeModal()">Batal</button><button onclick="saveTech()">Simpan</button></div>`;
- modal.classList.remove("hidden")
+ document.getElementById("modal").classList.remove("hidden");
 }
 async function saveTech(){
- const t={id:uid("TEC"),createdAt:new Date().toISOString(),name:tName.value,phone:tPhone.value,area:tArea.value,skills:tSkills.value,tools:tTools.value,vehicle:tVehicle.value,payment:tPayment.value,status:tStatus.value,lastOnline:tStatus.value==="ONLINE"?new Date().toISOString():""};
- await api("createTech",{tech:t});closeModal();await loadData()
+  const t={id:uid("TEC"),createdAt:new Date().toISOString(),name:tName.value,phone:tPhone.value,area:tArea.value,skills:tSkills.value,tools:tTools.value,vehicle:tVehicle.value,payment:tPayment.value,status:tStatus.value,lastOnline:tStatus.value==="ONLINE"?new Date().toISOString():""};
+  const username=document.getElementById("tUsername").value.trim()||t.phone;
+  const password=document.getElementById("tPassword").value||"123456";
+  if(!t.name||!t.phone||!username||!password){alert("Nama, HP, username, dan password wajib diisi.");return}
+  try{
+    const r=await api("createTech",{tech:t,user:{username,password,role:"TEKNISI",technicianId:t.id,name:t.name,status:"ACTIVE"}});
+    if(r.ok===false)throw new Error(r.error||"Gagal membuat teknisi.");
+    closeModal();await loadData();
+    alert(`Akun teknisi berhasil dibuat.\\nUsername: ${username}\\nPassword/PIN: ${password}`);
+  }catch(e){alert("Gagal membuat teknisi: "+e.message)}
 }
-function closeModal(){modal.classList.add("hidden")}
+function closeModal(){document.getElementById("modal").classList.add("hidden")}
 function techName(id){return state.techs.find(t=>t.id===id)?.name||""}
 function matchingTechs(o){const key=String(o.service||"").toLowerCase();return state.techs.filter(t=>t.status==="ONLINE"&&String(t.skills||"").toLowerCase().split(",").some(s=>s.trim()===key||key.includes(s.trim())||s.trim().includes(key)))}
 async function broadcast(id){
@@ -106,13 +218,22 @@ async function broadcast(id){
 async function toggleTech(id){const t=state.techs.find(x=>x.id===id);const s=t.status==="ONLINE"?"OFFLINE":"ONLINE";await api("updateTech",{id,status:s,lastOnline:s==="ONLINE"?new Date().toISOString():t.lastOnline});await loadData()}
 async function setOrderStatus(id,status){await api("updateOrder",{id,status,completedAt:status==="SELESAI"?new Date().toISOString():""});await loadData()}
 
-function populatePortalTechs(){portalTechSelect.innerHTML=state.techs.map(t=>`<option value="${t.id}">${esc(t.name)} — ${esc(t.status)}</option>`).join("");if(state.currentTechId)portalTechSelect.value=state.currentTechId;else if(state.techs[0])state.currentTechId=state.techs[0].id}
 function renderPortal(){
- if(!state.techs.length){portalProfile.innerHTML=portalOffers.innerHTML="<div class='empty'>Belum ada teknisi</div>";return}
- const id=portalTechSelect.value||state.currentTechId||state.techs[0].id;state.currentTechId=id;const t=state.techs.find(x=>x.id===id);if(!t)return;
- portalProfile.innerHTML=`<div class="portal-profile"><b>${esc(t.name)}</b><span>${esc(t.phone)}</span><span>${esc(t.area)}</span><span>Skill: ${esc(t.skills)}</span><span>Status: ${badge(t.status)}</span><button onclick="portalStatus('${t.id}')">${t.status==="ONLINE"?"Set Offline":"Set Online"}</button></div>`;
- const offers=state.orders.filter(o=>String(o.offeredTechnicianIds||"").split(",").includes(t.id)&&["DITAWARKAN","DITERIMA","ON_PROGRESS"].includes(o.status));
- portalOffers.innerHTML=offers.length?offers.map(o=>`<div class="offer"><h3>${esc(o.service)} — ${money(o.price)}</h3><p><b>${esc(o.customerName)}</b> · ${esc(o.customerPhone)}</p><p>${esc(o.address)}</p><p>${esc(o.complaint||"")}</p><div class="actions">${o.status==="DITAWARKAN"?`<button onclick="accept('${o.id}','${t.id}')">Terima Order</button><button class="secondary" onclick="reject('${o.id}','${t.id}')">Tolak</button>`:""}${o.status==="DITERIMA"?`<button onclick="techProgress('${o.id}')">Mulai Pengerjaan</button>`:""}${o.status==="ON_PROGRESS"?`<button onclick="techComplete('${o.id}')">Selesai</button>`:""}</div></div>`).join(""):"<div class='empty'>Tidak ada order yang ditawarkan.</div>";
+  if(state.user?.role!=="TEKNISI"){
+    portalProfile.innerHTML="<div class='empty'>Portal Teknisi hanya dapat digunakan oleh akun teknisi.</div>";
+    portalOffers.innerHTML="<div class='empty'>Login sebagai teknisi untuk melihat order.</div>";
+    return;
+  }
+  const id=state.user.technicianId;
+  const t=state.techs.find(x=>x.id===id);
+  if(!t){
+    portalProfile.innerHTML="<div class='empty'>Data teknisi belum ditemukan.</div>";
+    portalOffers.innerHTML="";
+    return;
+  }
+  portalProfile.innerHTML=`<div class="portal-profile"><b>${esc(t.name)}</b><span>${esc(t.phone)}</span><span>${esc(t.area)}</span><span>Skill: ${esc(t.skills)}</span><span>Status: ${badge(t.status)}</span><button onclick="portalStatus('${t.id}')">${t.status==="ONLINE"?"Set Offline":"Set Online"}</button></div>`;
+  const offers=state.orders.filter(o=>String(o.offeredTechnicianIds||"").split(",").includes(id)&&["DITAWARKAN","DITERIMA","ON_PROGRESS"].includes(o.status));
+  portalOffers.innerHTML=offers.length?offers.map(o=>`<div class="offer"><h3>${esc(o.service)} — ${money(o.price)}</h3><p><b>${esc(o.customerName)}</b> · ${esc(o.customerPhone)}</p><p>${esc(o.address)}</p><p>${esc(o.complaint||"")}</p><div class="actions">${o.status==="DITAWARKAN"?`<button onclick="accept('${o.id}','${id}')">Terima Order</button><button class="secondary" onclick="reject('${o.id}','${id}')">Tolak</button>`:""}${o.status==="DITERIMA"?`<button onclick="techProgress('${o.id}')">Mulai Pengerjaan</button>`:""}${o.status==="ON_PROGRESS"?`<button onclick="techComplete('${o.id}')">Selesai</button>`:""}</div></div>`).join(""):"<div class='empty'>Tidak ada order yang ditawarkan.</div>";
 }
 async function portalStatus(id){const t=state.techs.find(x=>x.id===id),s=t.status==="ONLINE"?"OFFLINE":"ONLINE";await api("updateTech",{id,status:s,lastOnline:s==="ONLINE"?new Date().toISOString():t.lastOnline});await loadData();renderPortal()}
 async function accept(orderId,techId){const r=await api("acceptOrder",{orderId,technicianId:techId});if(r.ok!==false){await loadData();showPage("portal")}else alert(r.error||"Order sudah diambil teknisi lain.")}
@@ -121,14 +242,29 @@ async function techProgress(id){await api("updateOrder",{id,status:"ON_PROGRESS"
 async function techComplete(id){await api("updateOrder",{id,status:"SELESAI",completedAt:new Date().toISOString()});const o=state.orders.find(x=>x.id===id);if(o?.technicianId)await api("updateTech",{id:o.technicianId,status:"ONLINE",lastOnline:new Date().toISOString()});await loadData();renderPortal()}
 
 function mockApi(action,payload){
- let r={ok:true};
- if(action==="list")return Promise.resolve({orders:state.orders,techs:state.techs,customers:state.customers});
- if(action==="createOrder"){state.orders.push(payload.order);let c=state.customers.find(x=>x.phone===payload.order.customerPhone);if(c){c.name=payload.order.customerName;c.address=payload.order.address}else state.customers.push({id:uid("CUS"),createdAt:new Date().toISOString(),name:payload.order.customerName,phone:payload.order.customerPhone,address:payload.order.address});return Promise.resolve(r)}
- if(action==="createTech"){state.techs.push(payload.tech);return Promise.resolve(r)}
- if(action==="updateTech"){let t=state.techs.find(x=>x.id===payload.id);if(t)Object.assign(t,payload);return Promise.resolve(r)}
- if(action==="updateOrder"){let o=state.orders.find(x=>x.id===payload.id);if(o)Object.assign(o,payload);return Promise.resolve(r)}
- if(action==="offerOrder"){let o=state.orders.find(x=>x.id===payload.orderId);if(o){o.status="DITAWARKAN";o.offeredTechnicianIds=payload.technicianIds.join(",")}return Promise.resolve(r)}
- if(action==="rejectOffer"){let o=state.orders.find(x=>x.id===payload.orderId);if(o){let ids=String(o.offeredTechnicianIds).split(",").filter(x=>x&&x!==payload.technicianId);o.offeredTechnicianIds=ids.join(",");if(!ids.length&&o.status==="DITAWARKAN")o.status="BARU"}return Promise.resolve(r)}
- if(action==="acceptOrder"){let o=state.orders.find(x=>x.id===payload.orderId);if(!o||o.status!=="DITAWARKAN")return Promise.resolve({ok:false,error:"Order sudah diambil / tidak tersedia"});if(!String(o.offeredTechnicianIds).split(",").includes(payload.technicianId))return Promise.resolve({ok:false,error:"Teknisi tidak diundang"});o.technicianId=payload.technicianId;o.status="DITERIMA";o.acceptedAt=new Date().toISOString();let t=state.techs.find(x=>x.id===payload.technicianId);if(t)t.status="BUSY";return Promise.resolve(r)}
- return Promise.resolve(r)
+  if(action==="login"){
+    if(payload.role==="ADMIN"&&payload.username==="admin"&&payload.password==="123456")
+      return Promise.resolve({ok:true,token:"demo-admin",user:{username:"admin",name:"Administrator",role:"ADMIN",technicianId:""}});
+    const t=state.techs.find(x=>x.username===payload.username && x.password===payload.password);
+    if(payload.role==="TEKNISI"&&t)return Promise.resolve({ok:true,token:"demo-"+t.id,user:{username:t.username,name:t.name,role:"TEKNISI",technicianId:t.id}});
+    return Promise.resolve({ok:false,error:"Username atau password salah."});
+  }
+  if(action==="me")return Promise.resolve({ok:true,user:state.user});
+  if(action==="list")return Promise.resolve({ok:true,orders:state.orders,techs:state.techs,customers:state.customers});
+  if(action==="createOrder"){
+    state.orders.push(payload.order);let c=state.customers.find(x=>x.phone===payload.order.customerPhone);
+    if(c){c.name=payload.order.customerName;c.address=payload.order.address}
+    else state.customers.push({id:uid("CUS"),createdAt:new Date().toISOString(),name:payload.order.customerName,phone:payload.order.customerPhone,address:payload.order.address});
+    return Promise.resolve({ok:true})
+  }
+  if(action==="createTech"){
+    const t={...payload.tech,username:payload.user.username,password:payload.user.password};
+    state.techs.push(t);return Promise.resolve({ok:true})
+  }
+  if(action==="updateTech"){let t=state.techs.find(x=>x.id===payload.id);if(t)Object.assign(t,payload);return Promise.resolve({ok:true})}
+  if(action==="updateOrder"){let o=state.orders.find(x=>x.id===payload.id);if(o)Object.assign(o,payload);return Promise.resolve({ok:true})}
+  if(action==="offerOrder"){let o=state.orders.find(x=>x.id===payload.orderId);if(o){o.status="DITAWARKAN";o.offeredTechnicianIds=payload.technicianIds.join(",")}return Promise.resolve({ok:true})}
+  if(action==="rejectOffer"){let o=state.orders.find(x=>x.id===payload.orderId);if(o){let ids=String(o.offeredTechnicianIds).split(",").filter(x=>x&&x!==payload.technicianId);o.offeredTechnicianIds=ids.join(",");if(!ids.length&&o.status==="DITAWARKAN")o.status="BARU"}return Promise.resolve({ok:true})}
+  if(action==="acceptOrder"){let o=state.orders.find(x=>x.id===payload.orderId);if(!o||o.status!=="DITAWARKAN")return Promise.resolve({ok:false,error:"Order sudah diambil / tidak tersedia"});if(!String(o.offeredTechnicianIds).split(",").includes(payload.technicianId))return Promise.resolve({ok:false,error:"Teknisi tidak diundang"});o.technicianId=payload.technicianId;o.status="DITERIMA";o.acceptedAt=new Date().toISOString();let t=state.techs.find(x=>x.id===payload.technicianId);if(t)t.status="BUSY";return Promise.resolve({ok:true})}
+  return Promise.resolve({ok:true})
 }
