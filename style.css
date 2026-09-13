@@ -10,3 +10,6 @@ input,select,textarea{width:100%;padding:11px;border:1px solid #d9dee8;border-ra
 .portal-grid{display:grid;grid-template-columns:1fr 1.4fr;gap:16px}.portal-profile{display:grid;gap:7px;margin-top:15px}.offer{border:1px solid #e2e6ee;border-radius:12px;padding:14px;margin-bottom:10px}.offer h3{margin:0 0 6px}.offer p{margin:5px 0;color:#667085}.empty{padding:25px;text-align:center;color:#98a2b3}
 @media(max-width:900px){.sidebar{width:190px}.kpis{grid-template-columns:1fr 1fr}.portal-grid{grid-template-columns:1fr}}
 @media(max-width:650px){.app{display:block}.sidebar{width:100%;padding:12px;position:sticky;top:0;z-index:5}.nav{display:flex;overflow:auto}.nav button{white-space:nowrap}.logout{display:none}.main{padding:14px}.topbar{align-items:flex-start}.kpis{grid-template-columns:1fr 1fr}.form-grid{grid-template-columns:1fr}.form-group.full{grid-column:auto}.toolbar{align-items:stretch;flex-direction:column}.toolbar input{max-width:none}}
+
+.login-role{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:8px 0 12px}.login-role .role{background:#fff;color:#172033;border:1px solid #dce2eb}.login-role .role.active{background:#172033;color:#fff}
+.sidebar-user{font-size:12px;color:#98a2b3;padding:12px 0;line-height:1.5}
