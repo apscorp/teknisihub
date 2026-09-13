@@ -1,4 +1,4 @@
-const CONFIG={API_URL:"PASTE_APPS_SCRIPT_WEB_APP_URL_HERE"};let db={orders:[],technicians:[],customers:[]};
+const CONFIG={API_URL:"https://script.google.com/macros/s/AKfycbzB4T-6qZ9Udei0GfDA-aWEbfSNowoMDZTUT5egItIo2Upr3vvzLvrheAfz653-il5zNQ/exec"};let db={orders:[],technicians:[],customers:[]};
 const $=x=>document.getElementById(x), money=n=>"Rp "+Number(n||0).toLocaleString("id-ID");
 function toast(x){$("toast").textContent=x;$("toast").style.display="block";setTimeout(()=>$("toast").style.display="none",2200)}
 function nav(p){document.querySelectorAll(".page").forEach(x=>x.classList.remove("active"));$(p).classList.add("active");render()}
