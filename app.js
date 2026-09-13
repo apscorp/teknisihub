@@ -1,4 +1,4 @@
-const CONFIG={API_URL:"https://script.google.com/macros/s/AKfycbyxkkO9Dl9zbQOL0K04BZC4ONDxFyjFYNRvxMxKFMcYNgCo3e0Bp2zxa82ivYe0cYKBXg/exec"}; // TeknisiHub V5.2
+const CONFIG={API_URL:"https://script.google.com/macros/s/AKfycby1G_rrq9kSPrqclhG6TmB5WCTtzlDTn_xZ_Lrb04trP584OWtlwUPhs2oTCD0l0Q1QMA/exec"}; // TeknisiHub V5.2 FIX
 let state={orders:[],techs:[],customers:[],user:null};
 let loginRole="ADMIN";
 const DEMO=CONFIG.API_URL.includes("PASTE_");
@@ -15,12 +15,13 @@ async function login(){
   const username=document.getElementById("loginUser").value.trim();
   const password=document.getElementById("loginPass").value;
   if(!username||!password){alert("Username dan password wajib diisi.");return}
+  const btn=document.querySelector('#loginScreen button[onclick="login()"]');
+  if(btn){btn.disabled=true;btn.textContent="Memeriksa..."}
   try{
     const r=await api("login",{username,password,role:loginRole});
-    if(!r.ok){alert(r.error||"Login gagal.");return}
-    state.user=r.user; localStorage.setItem("th_session",JSON.stringify(r));
-    boot();
-  }catch(e){alert("Login gagal: "+e.message)}
+    if(!r.ok)throw new Error(r.error||"Username atau password salah.");
+    state.user=r.user; localStorage.setItem("th_session",JSON.stringify(r)); boot();
+  }catch(e){alert("Login gagal: "+e.message);if(btn){btn.disabled=false;btn.textContent="Masuk"}}
 }
 function logout(){localStorage.removeItem("th_session");location.reload()}
 function boot(){
@@ -28,16 +29,12 @@ function boot(){
   document.getElementById("app").classList.remove("hidden");
   const u=state.user||{};
   document.getElementById("sidebarUser").innerHTML=`<b>${esc(u.name||u.username||"User")}</b><br>${esc(u.role||"")}`;
-  applyRoleUI();
-  showPage(u.role==="TEKNISI"?"portal":"dashboard");
-  loadData();
+  applyRoleUI(); showPage(u.role==="TEKNISI"?"portal":"dashboard"); loadData();
 }
 async function restoreSession(){
-  const raw=localStorage.getItem("th_session");
-  if(!raw)return;
+  const raw=localStorage.getItem("th_session"); if(!raw)return;
   try{
-    const s=JSON.parse(raw);
-    if(!s.token||!s.user)return;
+    const s=JSON.parse(raw); if(!s.token||!s.user)return;
     if(DEMO){state.user=s.user;boot();return}
     const r=await api("me",{token:s.token});
     if(r.ok){state.user=r.user;boot()}else localStorage.removeItem("th_session");
@@ -45,24 +42,30 @@ async function restoreSession(){
 }
 function applyRoleUI(){
   const isTech=state.user?.role==="TEKNISI";
-  document.querySelectorAll(".nav button").forEach(b=>{
-    const page=b.dataset.page;
-    b.classList.toggle("hidden",isTech && !["portal"].includes(page));
-  });
+  document.querySelectorAll(".nav button").forEach(b=>b.classList.toggle("hidden",isTech&&b.dataset.page!=="portal"));
 }
-async function api(action,payload={}){
-  if(DEMO){return mockApi(action,payload)}
-  const session=JSON.parse(localStorage.getItem("th_session")||"{}");
-  const r=await fetch(CONFIG.API_URL,{method:"POST",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify({action,...payload,token:payload.token||session.token||""})});
-  return await r.json();
+function api(action,payload={}){
+  if(DEMO)return mockApi(action,payload);
+  return new Promise((resolve,reject)=>{
+    const cb="thcb_"+Date.now().toString(36)+Math.random().toString(36).slice(2,8);
+    const session=JSON.parse(localStorage.getItem("th_session")||"{}");
+    const data={...payload,token:payload.token||session.token||""};
+    const qs=new URLSearchParams({action,payload:JSON.stringify(data),callback:cb});
+    const script=document.createElement("script");
+    let done=false;
+    const cleanup=()=>{done=true;delete window[cb];script.remove()};
+    const timer=setTimeout(()=>{if(done)return;cleanup();reject(new Error("Koneksi ke Google Apps Script gagal / timeout. Pastikan URL Web App berakhiran /exec dan deployment sudah diperbarui."))},15000);
+    window[cb]=(result)=>{clearTimeout(timer);cleanup();resolve(result)};
+    script.onerror=()=>{clearTimeout(timer);cleanup();reject(new Error("Tidak dapat terhubung ke Google Apps Script. Cek URL API dan deployment Web App."))};
+    script.src=CONFIG.API_URL+(CONFIG.API_URL.includes("?")?"&":"?")+qs.toString();
+    document.body.appendChild(script);
+  });
 }
 async function loadData(){
   try{
-    let r=await api("list");
-    if(r.ok===false)throw new Error(r.error||"Gagal memuat data");
+    const r=await api("list"); if(!r.ok)throw new Error(r.error||"Gagal memuat data");
     state.orders=r.orders||[];state.techs=r.techs||[];state.customers=r.customers||[];
-    document.getElementById("syncText").textContent=DEMO?"Demo Mode":"Google Sheets Connected";
-    refreshAll();
+    document.getElementById("syncText").textContent=DEMO?"Demo Mode":"Google Sheets Connected"; refreshAll();
   }catch(e){alert("Gagal memuat data: "+e.message)}
 }
 function refreshAll(){renderDashboard();renderOrders();renderDispatch();renderTechs();renderCustomers();renderFinance();renderPortal()}
@@ -78,17 +81,6 @@ function money(n){return "Rp"+Number(n||0).toLocaleString("id-ID")}
 function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]))}
 function badge(s){let c=String(s||"").toLowerCase();return `<span class="badge ${c.includes("online")?"online":c.includes("busy")?"busy":c.includes("pending")?"pending":c.includes("batal")?"danger":""}">${esc(s||"-")}</span>`}
 function uid(p){return p+"_"+Date.now().toString(36)+Math.random().toString(36).slice(2,6)}
-
-async function api(action,payload={}){
-  if(DEMO){return mockApi(action,payload)}
-  const r=await fetch(CONFIG.API_URL,{method:"POST",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify({action,...payload})});
-  return await r.json();
-}
-async function loadData(){
-  try{let r=await api("list");state.orders=r.orders||[];state.techs=r.techs||[];state.customers=r.customers||[];document.getElementById("syncText").textContent=DEMO?"Demo Mode":"Google Sheets Connected";refreshAll()}
-  catch(e){alert("Gagal memuat data: "+e.message)}
-}
-function refreshAll(){renderDashboard();renderOrders();renderDispatch();renderTechs();renderCustomers();renderFinance();populatePortalTechs();renderPortal()}
 
 function renderDashboard(){
   const active=state.orders.filter(o=>!["SELESAI","DIBATALKAN"].includes(o.status)).length;
@@ -268,3 +260,5 @@ function mockApi(action,payload){
   if(action==="acceptOrder"){let o=state.orders.find(x=>x.id===payload.orderId);if(!o||o.status!=="DITAWARKAN")return Promise.resolve({ok:false,error:"Order sudah diambil / tidak tersedia"});if(!String(o.offeredTechnicianIds).split(",").includes(payload.technicianId))return Promise.resolve({ok:false,error:"Teknisi tidak diundang"});o.technicianId=payload.technicianId;o.status="DITERIMA";o.acceptedAt=new Date().toISOString();let t=state.techs.find(x=>x.id===payload.technicianId);if(t)t.status="BUSY";return Promise.resolve({ok:true})}
   return Promise.resolve({ok:true})
 }
+
+window.addEventListener("DOMContentLoaded",()=>{restoreSession()});
