@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="id"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>TeknisiHub V2</title><link rel="stylesheet" href="style.css">
+</head><body>
+<header><div class="logo">🔧 TeknisiHub <span>V2</span></div><nav>
+<button data-page="dashboard">Dashboard</button><button data-page="orders">Order</button><button data-page="technicians">Teknisi</button><button data-page="customers">Customer</button><button data-page="finance">Keuangan</button>
+</nav></header>
+<main>
+<section id="dashboard" class="page active"><div class="hero"><div><small>PLATFORM SERVICE CILEUNGSI</small><h1>Customer datang. Teknisi ambil order.</h1><p>Kelola order service rumah tangga dan jaringan teknisi freelance dalam satu tempat.</p></div><button class="primary" onclick="openOrder()">+ Order Baru</button></div><div id="stats" class="cards"></div><div class="panel"><h2>Order terbaru</h2><div id="recent"></div></div></section>
+<section id="orders" class="page"><div class="head"><div><small>OPERASIONAL</small><h1>Order</h1></div><button class="primary" onclick="openOrder()">+ Order Baru</button></div><div class="filters"><input id="search" placeholder="Cari customer, HP, service..."><select id="filter"><option value="">Semua status</option><option>Baru</option><option>Ditawarkan</option><option>Diterima</option><option>On Progress</option><option>Selesai</option><option>Dibatalkan</option></select></div><div class="panel"><div id="orderList"></div></div></section>
+<section id="technicians" class="page"><div class="head"><div><small>NETWORK TEKNISI</small><h1>Teknisi</h1></div><button class="primary" onclick="openTech()">+ Teknisi</button></div><div class="panel"><div id="techList"></div></div></section>
+<section id="customers" class="page"><div class="head"><div><small>DATABASE</small><h1>Customer</h1></div></div><div class="panel"><div id="custList"></div></div></section>
+<section id="finance" class="page"><div class="head"><div><small>FINANSIAL</small><h1>Keuangan</h1></div></div><div id="financeStats" class="cards"></div><div class="panel"><h2>Transaksi selesai</h2><div id="financeList"></div></div></section>
+</main>
+
+<div class="modal" id="orderModal"><div class="modalbox"><button class="x" onclick="closeModal('orderModal')">×</button><h2>Order Customer</h2><form id="orderForm">
+<label>Nama Customer<input id="name" required></label><label>WhatsApp<input id="phone" required></label><label>Alamat<textarea id="address" required></textarea></label>
+<div class="two"><label>Service<select id="service" required><option>AC</option><option>Mesin Cuci</option><option>Kulkas</option><option>Dispenser</option><option>TV</option><option>Lainnya</option></select></label><label>Prioritas<select id="priority"><option>Normal</option><option>Urgent</option></select></label></div>
+<label>Keluhan<textarea id="complaint" required></textarea></label><div class="two"><label>Estimasi Harga Customer<input id="price" type="number" min="0" value="0"></label><label>Fee Teknisi<input id="techFee" type="number" min="0" value="0"></label></div>
+<label>Teknisi<select id="technician"><option value="">Belum ditentukan</option></select></label>
+<button class="primary wide">Simpan Order</button></form></div></div>
+
+<div class="modal" id="techModal"><div class="modalbox"><button class="x" onclick="closeModal('techModal')">×</button><h2>Tambah Teknisi</h2><form id="techForm">
+<label>Nama<input id="tn" required></label><label>WhatsApp<input id="tp" required></label><label>Area<input id="ta" placeholder="Cileungsi, Jonggol..." required></label><label>Keahlian<input id="ts" placeholder="AC, Mesin Cuci, Kulkas" required></label>
+<div class="two"><label>Alat sendiri?<select id="tools"><option>Ya</option><option>Tidak</option></select></label><label>Kendaraan<select id="vehicle"><option>Motor</option><option>Mobil</option><option>Tidak ada</option></select></label></div>
+<label>Rekening/ewallet pembayaran<input id="pay"></label><button class="primary wide">Simpan Teknisi</button></form></div></div>
+
+<div class="modal" id="detailModal"><div class="modalbox"><button class="x" onclick="closeModal('detailModal')">×</button><div id="detail"></div></div></div>
+<div id="toast"></div><script src="app.js"></script></body></html>
