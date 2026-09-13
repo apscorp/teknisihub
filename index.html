@@ -10,11 +10,15 @@
 <div id="loginScreen" class="login-screen">
   <div class="login-card">
     <div class="brand">TeknisiHub</div>
-    <p>Platform order & dispatch teknisi freelance</p>
-    <input id="loginUser" placeholder="Username" value="admin">
-    <input id="loginPass" type="password" placeholder="Password" value="123456">
+    <p>Login Admin & Teknisi</p>
+    <div class="login-role">
+      <button id="roleAdmin" class="role active" onclick="setLoginRole('ADMIN')">Admin</button>
+      <button id="roleTech" class="role" onclick="setLoginRole('TEKNISI')">Teknisi</button>
+    </div>
+    <input id="loginUser" placeholder="Username">
+    <input id="loginPass" type="password" placeholder="Password / PIN">
     <button onclick="login()">Masuk</button>
-    <small>Demo: admin / 123456</small>
+    <small id="loginHint">Admin demo: admin / 123456</small>
   </div>
 </div>
 
@@ -30,7 +34,7 @@
       <button data-page="finance" onclick="showPage('finance')">Keuangan</button>
       <button data-page="portal" onclick="showPage('portal')">Portal Teknisi</button>
     </div>
-    <button class="logout" onclick="logout()">Keluar</button>
+    <div id="sidebarUser" class="sidebar-user"></div><button class="logout" onclick="logout()">Keluar</button>
   </aside>
 
   <main class="main">
@@ -89,8 +93,7 @@
       <div class="portal-grid">
         <div class="card">
           <h2>Portal Teknisi</h2>
-          <p class="muted">Simulasi portal mobile teknisi. Pilih teknisi untuk masuk sebagai teknisi.</p>
-          <select id="portalTechSelect" onchange="renderPortal()"></select>
+          <p class="muted">Portal ini menampilkan akun teknisi yang sedang login.</p>
           <div id="portalProfile"></div>
         </div>
         <div class="card">
