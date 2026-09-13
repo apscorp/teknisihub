@@ -1,4 +1,4 @@
-const CONFIG={API_URL:"https://script.google.com/macros/s/AKfycbyUjwnsFlJMYPBOrWt2HDzZcQzSZIykuq1nKvmEAKraikXE6r704m334PhTjls7fzPDaw/exec"}; // TeknisiHub V5.2 FIX
+const CONFIG={API_URL:"https://script.google.com/macros/s/AKfycbyFOMd7x0YfCx-RzO2zW9wsJ0psd-FqXNZ0018BpLs8uItytW2HWaj6Uft-z23Bk5Y5Mg/exec"}; // TeknisiHub V5.2 FIX
 let state={orders:[],techs:[],customers:[],user:null};
 let loginRole="ADMIN";
 const DEMO=CONFIG.API_URL.includes("PASTE_");
